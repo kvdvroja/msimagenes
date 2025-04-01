@@ -34,7 +34,7 @@ class Facial:
     
     def cargar_modelo_yolo(self):
         """Carga el modelo YOLOv8 entrenado desde un archivo local."""
-        model_path = './best.pt'  # Cambia esto a la ruta donde está guardado tu archivo best.pt
+        model_path = './necklaces.pt'  # Cambia esto a la ruta donde está guardado tu archivo best.pt
         model = YOLO(model_path)  # Cargar el modelo localmente
         return model
     
@@ -258,7 +258,6 @@ class Facial:
                     self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Traje detectado pero sin corbata</td></tr>"
                 return False
             
-
     def detectar_accesorios(self, image, msg):
         """
         Detecta accesorios como anteojos, auriculares, collares, etc., utilizando el modelo YOLOv8.
@@ -333,9 +332,6 @@ class Facial:
             collares_detectados = True
 
         return collares_detectados, msg
-
-
-
 
     def Validar(self):
         try:
@@ -547,6 +543,10 @@ class Facial:
             res_proporcion, msg = self.detectar_proporcion_cabeza_cuerpo(image, msg)
             if not res_proporcion:
                 respuesta = False
+                
+            # respuesta_nitidez, msg = self.validar_nitidez(image, msg)
+            # if not respuesta_nitidez:
+            #     respuesta = False
 
             self.success = "1" if respuesta else "2"
             self.message = msg
@@ -636,7 +636,6 @@ class Facial:
         else:
             print("Cabeza y hombros rectos.")
             return True, diferencia_y
-
         
     def validar_inclinacion_hombros(self, image):
         alto, ancho, _ = image.shape
@@ -683,6 +682,21 @@ class Facial:
             else:
                 print("✅ Hombros alineados visualmente.")
                 return True, diferencia_y
+            
+    def validar_nitidez(self, image, msg):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        var_laplacian = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+        umbral_nitidez = 1000  # Puedes ajustar este valor según tus pruebas
+
+        if var_laplacian < umbral_nitidez:
+            msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td>"
+            msg += f"<td class='ytradre_tbl_td'> Imagen con poca calidad&nbsp;<b style='color:red'>({var_laplacian:.2f})</b></td></tr>"
+            return False, msg
+        else:
+            msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td>"
+            msg += f"<td class='ytradre_tbl_td'> Imagen con buena calidad&nbsp;<b style='color:green'>({var_laplacian:.2f})</b></td></tr>"
+            return True, msg
 
 
 
