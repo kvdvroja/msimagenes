@@ -2,6 +2,7 @@ import json
 import cv2
 import numpy as np
 import urllib.request
+import math
 from PIL import Image
 from math import floor
 import mediapipe as mp
@@ -19,6 +20,7 @@ class Facial:
         self.config = self.load_config()
         self.model = self.cargar_modelo_yolo()
         self.model_accessories = self.cargar_modelo_accesorios()
+        self.mp_pose = mp.solutions.pose
         self.model_corbatta = None
         self.model_traje = None
         self.message = ""
@@ -32,8 +34,8 @@ class Facial:
     
     def cargar_modelo_yolo(self):
         """Carga el modelo YOLOv8 entrenado desde un archivo local."""
-        model_path = './best.pt'  # Cambia esto a la ruta donde está guardado tu archivo best.pt
-        model = YOLO(model_path)  # Cargar el modelo localmente
+        model_path = './necklaces.pt'  # Cambia esto a la ruta donde está guardado tu archivo best.pt
+        model = YOLO(model_path)
         return model
     
     def cargar_modelo_accesorios(self):
@@ -97,13 +99,15 @@ class Facial:
 
         height, width, _ = image.shape
 
-        border_width = int(width * 0.1)
+        # Aumentar el área del borde para analizar más píxeles blancos
+        border_width = int(width * 0.1)  # Consideramos el 10% de los bordes
         border_height = int(height * 0.1)
 
+        # Analizamos una mayor parte de los bordes (top, bottom, left, right)
         top_border = image[0:border_height, :]
-        bottom_border = image[height - border_height:height, :] 
-        left_border = image[:, 0:border_width] 
-        right_border = image[:, width - border_width:width] 
+        bottom_border = image[height - border_height:height, :]
+        left_border = image[:, 0:border_width]
+        right_border = image[:, width - border_width:width]
 
         total_white_pixels = 0
         total_pixels = 0
@@ -111,7 +115,6 @@ class Facial:
 
         for border in all_borders:
             white_mask = cv2.inRange(border, blanco_inferior, blanco_superior)
-
             white_pixels = cv2.countNonZero(white_mask)
             total_white_pixels += white_pixels
             total_pixels += border.shape[0] * border.shape[1]
@@ -123,13 +126,13 @@ class Facial:
         v_fondo_blanco_similitud = int(parametros["fondo_blanco_similitud"])
 
         # Si el porcentaje de píxeles blancos es mayor que el umbral, consideramos que el fondo es blanco
-        if porcentaje_similitud > v_fondo_blanco_similitud:
-            print("Fondo tiene el color blanco requerido.")
+        if porcentaje_similitud >= v_fondo_blanco_similitud:
+            print(f"Fondo tiene el color blanco requerido ({porcentaje_similitud}%)")
             return True  
         else:
-            print("Fondo NO tiene el color blanco requerido.")
+            print(f"Fondo NO tiene el color blanco requerido ({porcentaje_similitud}%)")
             return False
-        
+
     def validar_cabeza_recta(self, image):
         """
         Verifica si la cabeza está inclinada hacia un lado o está recta.
@@ -256,7 +259,6 @@ class Facial:
                     self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Traje detectado pero sin corbata</td></tr>"
                 return False
             
-
     def detectar_accesorios(self, image, msg):
         """
         Detecta accesorios como anteojos, auriculares, collares, etc., utilizando el modelo YOLOv8.
@@ -274,7 +276,7 @@ class Facial:
             confianza = deteccion.conf[0].item()
 
             # Si la confianza es mayor o igual a 0.5, consideramos que es una detección válida
-            if confianza >= 0.5:
+            if confianza >= 0.6:
                 accesorio_detectado = clases_nombres[clase]
 
                 # Ignorar los sombreros (hat) y continuar
@@ -304,37 +306,33 @@ class Facial:
         return accesorios_detectados, msg
         
     def detectar_collares(self, image, msg):
-        resultados_collar = self.model.predict(image) 
+        alto, ancho, _ = image.shape
+        mitad_inferior = image[int(alto / 2):, :]  # Cortamos desde la mitad hacia abajo
+
+        resultados_collar = self.model.predict(mitad_inferior)
         collares_detectados = False
 
-        # Detección usando la lógica antigua
-        for deteccion in resultados_collar[0].boxes: 
-            xyxy = deteccion.xyxy[0].cpu().numpy()  
-            x1, y1, x2, y2 = map(int, xyxy) 
-            confianza = deteccion.conf[0].item()  
-
-            umbral_confianza = 0.5 
+        for deteccion in resultados_collar[0].boxes:
+            x1, y1, x2, y2 = map(int, deteccion.xyxy[0].cpu().numpy())
+            confianza = deteccion.conf[0].item()
+            umbral_confianza = 0.5
 
             if confianza >= umbral_confianza:
-                collares_detectados = True
+                # Ajustamos las coordenadas Y porque estamos usando la mitad inferior de la imagen
+                y1 += int(alto / 2)
+                y2 += int(alto / 2)
                 cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 255), 2)
-                break  # Si ya se detecta un collar, no es necesario seguir buscando
+                collares_detectados = True
+                break  # Solo necesitamos detectar uno para marcar
 
         # Llama a detectar_accesorios y pasa msg como argumento
         accesorios_detectados, msg = self.detectar_accesorios(image, msg)
-        
-        # Combinación de la detección de collares entre la lógica antigua y accessories.pt
+
         if collares_detectados or 'gold' in accesorios_detectados or 'silver' in accesorios_detectados:
-            # Solo agregar un mensaje, independientemente de cuántas lógicas lo detecten
             msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Se han detectado collares.</td></tr>"
             collares_detectados = True
-        else:
-            # Si ninguna lógica detecta collares
-            self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> No se han detectado collares.</td></tr>"
 
         return collares_detectados, msg
-
-
 
     def Validar(self):
         try:
@@ -424,7 +422,6 @@ class Facial:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-            # Variable para controlar si se bordearon los ojos
             ojos_bordeados = False
             rostro_bordeado = False
 
@@ -445,23 +442,20 @@ class Facial:
                 if results.multi_face_landmarks:
                     for face_landmarks in results.multi_face_landmarks:
                         # Landmarks específicos de los ojos (consultar los índices en Mediapipe)
-                        ojo_izq = face_landmarks.landmark[133]  # Ejemplo para el ojo izquierdo
-                        ojo_der = face_landmarks.landmark[362]  # Ejemplo para el ojo derecho
+                        ojo_izq = face_landmarks.landmark[133]
+                        ojo_der = face_landmarks.landmark[362]
 
-                        # Convertir las coordenadas relativas en píxeles
                         h, w, _ = image.shape
                         x_ojo_izq, y_ojo_izq = int(ojo_izq.x * w), int(ojo_izq.y * h)
                         x_ojo_der, y_ojo_der = int(ojo_der.x * w), int(ojo_der.y * h)
 
-                        # Tamaño dinámico para los cuadros, basado en la proporción del rostro detectado
-                        tamaño_cuadro = int(w * 0.05)  # 5% del ancho de la imagen (puedes ajustar el porcentaje según sea necesario)
+                        tamaño_cuadro = int(w * 0.05)
 
                         intensidad_izq = np.mean(image[y_ojo_izq-tamaño_cuadro:y_ojo_izq+tamaño_cuadro, x_ojo_izq-tamaño_cuadro:x_ojo_izq+tamaño_cuadro])
                         intensidad_der = np.mean(image[y_ojo_der-tamaño_cuadro:y_ojo_der+tamaño_cuadro, x_ojo_der-tamaño_cuadro:x_ojo_der+tamaño_cuadro])
                         umbral_intensidad = 50
                         
-                        # Desplazamiento horizontal para separar los cuadros entre sí
-                        desplazamiento_x = int(w * 0.05)  # 2% del ancho de la imagen (ajustar según sea necesario)
+                        desplazamiento_x = int(w * 0.05)
 
                         # Dibujar los cuadros en los ojos con el desplazamiento
                         if intensidad_izq > umbral_intensidad and not respuesta_ojo_izq:
@@ -508,29 +502,21 @@ class Facial:
                     respuesta = False
             else:
                 print('TRAJE == NO')
-                #msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Detección de traje no habilitada.</td></tr>"
 
-
-            # Si se detectaron ojos o rostros, generar nombre del archivo y guardar la imagen
             if ojos_bordeados or rostro_bordeado:
                 nombre_archivo = self.generar_nombre_archivo(usuario_id)
                 url_final = self.guardar_imagen(image, nombre_archivo)
 
-                # Eliminar la imagen temporal después de un retraso de 10 segundos
                 ruta_imagen = os.path.join(self.config['GENERAL']['upload_static'], self.config['GENERAL']['upload_static_dir'], nombre_archivo)
-                self.eliminar_imagen(ruta_imagen, 1200)  # Eliminar la imagen después de 20 minutos
+                self.eliminar_imagen(ruta_imagen, 1200)
                 
-            # if self.detectar_anteojos(image):
-            #     msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se han detectado anteojos.</td></tr>"
-            # else:
-            #     #msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'><b style='color:red;'>NO</b> se detectaron anteojos.</td></tr>"
-            #     respuesta = False
-                
-            if self.validar_cabeza_recta(image):
-                #msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> La cabeza está recta </td></tr>"
+            respuesta_cabeza_recta, diferencia_hombros = self.validar_cabeza_y_hombros_rectos(image)
+            if respuesta_cabeza_recta:
                 respuesta_cabeza_recta = True
             else:
-                msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> La cabeza está&nbsp;<b style='color:red;'>inclinada</b></td></tr>"
+                msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td>"
+                msg += f"<td class='ytradre_tbl_td'> La imagen muestra&nbsp;<b style='color:red;'>inclinación</b> de cabeza o cuerpo"
+                msg += f"&nbsp;&nbsp;<b style='color:red'>(Diferencia hombros: {diferencia_hombros}px)</b></td></tr>"
                 respuesta = False
             
             respuesta_espacio, msg = self.detectar_espacio_arriba_con_color(image, msg)
@@ -540,6 +526,10 @@ class Facial:
             res_proporcion, msg = self.detectar_proporcion_cabeza_cuerpo(image, msg)
             if not res_proporcion:
                 respuesta = False
+                
+            # respuesta_nitidez, msg = self.validar_nitidez(image, msg)
+            # if not respuesta_nitidez:
+            #     respuesta = False
 
             self.success = "1" if respuesta else "2"
             self.message = msg
@@ -561,18 +551,27 @@ class Facial:
     def detectar_espacio_arriba_con_color(self, image, msg):
         alto, ancho, _ = image.shape
         centro_x = ancho // 2
+        
+        # Cargar los valores del JSON dinámico
+        data = json.loads(self.json_local)
+        parametros = json.loads(data["v_parametro_json"].replace("'", '"'))
+
+        # Obtener valores de margen superior desde el JSON, usar valores por defecto si no están
+        tope_min = int(parametros.get("tope_alt_minimo", 10))
+        tope_max = int(parametros.get("tope_alt_maximo", 30))
 
         for y in range(alto):
             pixel = image[y, centro_x]
             if not all(245 <= c <= 255 for c in pixel):  # B, G, R
                 distancia = y
-                if distancia < 10:
-                    msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Muy poco espacio sobre la cabeza</td></tr>"
+                if distancia < tope_min:
+                    msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Poco espacio sobre la cabeza&nbsp;<b style='color:#ff0018'>({distancia})</b>&nbsp;<b style='color:blue'>({tope_min})</b></td></tr>"
                     return False, msg
-                elif distancia > 15:
-                    msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Mucho espacio encima de la cabeza</td></tr>"
+                elif distancia > tope_max:
+                    msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Mucho espacio encima de la cabeza&nbsp;<b style='color:#ff0018'>({distancia})</b>&nbsp;<b style='color:blue'>({tope_max})</b></td></tr>"
                     return False, msg
                 else:
+                    msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Espacio de la imagen en el rango permitido&nbsp;<b style='color:blue'>({tope_min}</b>&nbsp;<b style='color:blue'>- {tope_max})</b></td></tr>"
                     return True, msg
         return False, msg
     
@@ -595,7 +594,7 @@ class Facial:
         proporcion_altura_rostro = altura_rostro / alto
 
         if proporcion_altura_rostro < 0.35:
-            msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> La imagen será estrictamente tomada de frente, enfocando al rostro a partir de los hombros.</td></tr>"
+            msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> La imagen será estrictamente tomada de frente, enfocando al rostro a partir de los hombros (No mostrar medio cuerpo).</td></tr>"
             return False, msg
 
         if proporcion > 0.70:
@@ -603,6 +602,88 @@ class Facial:
             return False, msg
         else:
             return True, msg
+        
+    def validar_cabeza_y_hombros_rectos(self, image):
+        cabeza_recta = self.validar_cabeza_recta(image)
+        hombros_rectos, diferencia_y = self.validar_inclinacion_hombros(image)
+
+        if not cabeza_recta and not hombros_rectos:
+            print("Inclinación detectada en cabeza y hombros.")
+            return False, diferencia_y
+        elif not cabeza_recta:
+            print("Inclinación detectada solo en la cabeza.")
+            return False, diferencia_y
+        elif not hombros_rectos:
+            print("Inclinación detectada solo en los hombros.")
+            return False, diferencia_y
+        else:
+            print("Cabeza y hombros rectos.")
+            return True, diferencia_y
+        
+    def validar_inclinacion_hombros(self, image):
+        alto, ancho, _ = image.shape
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        with self.mp_pose.Pose(static_image_mode=True) as pose:
+            results = pose.process(image_rgb)
+
+            if not results.pose_landmarks:
+                print("⚠️ No se detectaron hombros.")
+                return True, 0  # <- Ahora devuelve una tupla
+
+            landmarks = results.pose_landmarks.landmark
+            hombro_izq = landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER]
+            hombro_der = landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
+
+            x_izq = int(hombro_izq.x * ancho)
+            x_der = int(hombro_der.x * ancho)
+            x_izq = np.clip(x_izq, 0, ancho - 1)
+            x_der = np.clip(x_der, 0, ancho - 1)
+
+            def buscar_pixel_hombro_mas_alto(x):
+                for y in range(int(alto * 0.5), alto):
+                    pixel = image[y, x]
+                    if not all(245 <= c <= 255 for c in pixel):
+                        return y
+                return alto
+
+            y_izq = buscar_pixel_hombro_mas_alto(x_izq)
+            y_der = buscar_pixel_hombro_mas_alto(x_der)
+
+            diferencia_y = abs(y_izq - y_der)
+            umbral_diferencia = int(alto * 0.04)
+
+            cv2.circle(image, (x_izq, y_izq), 4, (255, 0, 0), -1)
+            cv2.circle(image, (x_der, y_der), 4, (0, 255, 0), -1)
+            cv2.line(image, (x_izq, y_izq), (x_der, y_der), (0, 0, 255), 2)
+
+            print(f"[LOGICA VISUAL] Altura hombro izq: {y_izq}, der: {y_der} => Diferencia: {diferencia_y}px")
+
+            if diferencia_y > umbral_diferencia:
+                print("❌ Hombros inclinados visualmente.")
+                return False, diferencia_y
+            else:
+                print("✅ Hombros alineados visualmente.")
+                return True, diferencia_y
+            
+    def validar_nitidez(self, image, msg):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        var_laplacian = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+        umbral_nitidez = 1000
+
+        if var_laplacian < umbral_nitidez:
+            msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td>"
+            msg += f"<td class='ytradre_tbl_td'> Imagen con poca calidad&nbsp;<b style='color:red'>({var_laplacian:.2f})</b></td></tr>"
+            return False, msg
+        else:
+            msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td>"
+            msg += f"<td class='ytradre_tbl_td'> Imagen con buena calidad&nbsp;<b style='color:green'>({var_laplacian:.2f})</b></td></tr>"
+            return True, msg
+
+
+
+
 
 
 
