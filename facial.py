@@ -543,6 +543,9 @@ class Facial:
             if not res_proporcion:
                 respuesta = False
                 
+            ropa_blanca_detectada, msg = self.detectar_ropa_blanca(image, msg)
+            if not ropa_blanca_detectada:
+                print('ROPABLANCA == NO')
             # respuesta_nitidez, msg = self.validar_nitidez(image, msg)
             # if not respuesta_nitidez:
             #     respuesta = False
@@ -699,23 +702,49 @@ class Facial:
     
     def predecir_genero(self, image):
         """Detecta el género en la imagen usando el modelo cargado."""
-        # Redimensionar la imagen a 227x227, que es el tamaño esperado por el modelo Caffe
         image_resized = cv2.resize(image, (227, 227))
 
-        # Convertir la imagen a formato blob para usar con OpenCV DNN
         blob = cv2.dnn.blobFromImage(image_resized, 1.0, (227, 227), (104, 117, 123), swapRB=False, crop=False)
 
-        # Establecer la imagen como entrada
-        self.net.setInput(blob)  # Usar self.net para acceder al modelo
+        self.net.setInput(blob)
 
-        # Realizar la predicción
         output = self.net.forward()
 
-        # Determinar el género (0: Hombre, 1: Mujer)
         gender = np.argmax(output)
         gender = "Hombre" if gender == 0 else "Mujer"
         print(f"Predicción de género: {gender}")
         return gender
+    
+    def detectar_ropa_blanca(self, image, msg):
+        alto, ancho, _ = image.shape
+        y_inicio = int(alto * 0.45)
+        y_fin = int(alto * 0.85)
+        x_inicio = int(ancho * 0.25)
+        x_fin = int(ancho * 0.75)
+
+        region_torso = image[y_inicio:y_fin, x_inicio:x_fin]
+
+        blanco_bajo = np.array([200, 200, 200], dtype=np.uint8)
+        blanco_alto = np.array([255, 255, 255], dtype=np.uint8)
+
+        mascara_blanca = cv2.inRange(region_torso, blanco_bajo, blanco_alto)
+        pixeles_blancos = cv2.countNonZero(mascara_blanca)
+        total_pixeles = region_torso.shape[0] * region_torso.shape[1]
+        porcentaje_blanco = (pixeles_blancos / total_pixeles) * 100
+
+        umbral_blanco = 35  # Ajustable
+
+        cv2.rectangle(image, (x_inicio, y_inicio), (x_fin, y_fin), (0, 255, 0), 2)
+
+        if porcentaje_blanco >= umbral_blanco:
+            msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se ha detectado ropa blanca.</td></tr>"
+            print(f"✅ Ropa blanca detectada ({porcentaje_blanco:.2f}%)")
+            return True, msg
+        else:
+            msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se ha detectado ropa blanca.</td></tr>"
+            print(f"❌ No se detectó ropa blanca ({porcentaje_blanco:.2f}%)")
+            return False, msg
+
 
 
 
