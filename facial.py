@@ -775,13 +775,13 @@ class Facial:
         esquina_izq = image[alto - 1, 0:int(ancho * 0.1)]
         if np.all((esquina_izq >= blanco_min) & (esquina_izq <= blanco_max), axis=1).any():
             errores = True
-            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en el borde izquierdo (desde la esquina inferior)</td></tr>"
+            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en el borde izquierdo.</td></tr>"
 
         # Punto inferior derecho (ver hacia la derecha)
         esquina_der = image[alto - 1, int(ancho * 0.9):]
         if np.all((esquina_der >= blanco_min) & (esquina_der <= blanco_max), axis=1).any():
             errores = True
-            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en el borde derecho (desde la esquina inferior)</td></tr>"
+            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en el borde derecho.</td></tr>"
 
         # Punto inferior centro (ver hacia abajo)
         esquina_inf_der = image[alto - 1, int(ancho * 0.9):]
