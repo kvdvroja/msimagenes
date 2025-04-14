@@ -25,6 +25,7 @@ class Facial:
         self.model_traje = None
         self.message = ""
         self.mp_face_mesh = mp.solutions.face_mesh
+        self.cargar_modelo_genero()
 
     def load_config(self):
         """Carga las variables de configuración desde un archivo .cfg."""
@@ -43,6 +44,13 @@ class Facial:
         model_path_accessories = './accesories.pt'  # Ruta del archivo entrenado para accesorios
         model = YOLO(model_path_accessories)
         return model
+    
+    def cargar_modelo_genero(self):
+        """Carga el modelo de género preentrenado en OpenCV (caffe)."""
+        modelFile = "./gender_net.caffemodel"  # Ruta de tu archivo caffemodel
+        configFile = "./gender_deploy.prototxt"  # Ruta de tu archivo prototxt
+        self.net = cv2.dnn.readNetFromCaffe(configFile, modelFile)  # Asignar el modelo a self.net
+
     
     def cargar_modelo_anteojos(self):
         """Carga el modelo YOLOv8 entrenado para detectar anteojos."""
@@ -94,20 +102,18 @@ class Facial:
         data = json.loads(self.json_local)
         parametros = json.loads(data["v_parametro_json"].replace("'", '"'))
 
-        blanco_inferior = np.array([250, 250, 250], dtype=np.uint8)
+        blanco_inferior = np.array([220, 220, 220], dtype=np.uint8)
         blanco_superior = np.array([255, 255, 255], dtype=np.uint8)
 
         height, width, _ = image.shape
 
-        # Aumentar el área del borde para analizar más píxeles blancos
-        border_width = int(width * 0.1)  # Consideramos el 10% de los bordes
+        border_width = int(width * 0.1)
         border_height = int(height * 0.1)
 
-        # Analizamos una mayor parte de los bordes (top, bottom, left, right)
         top_border = image[0:border_height, :]
-        bottom_border = image[height - border_height:height, :]
-        left_border = image[:, 0:border_width]
-        right_border = image[:, width - border_width:width]
+        bottom_border = image[height - border_height:height, :] 
+        left_border = image[:, 0:border_width] 
+        right_border = image[:, width - border_width:width] 
 
         total_white_pixels = 0
         total_pixels = 0
@@ -115,6 +121,7 @@ class Facial:
 
         for border in all_borders:
             white_mask = cv2.inRange(border, blanco_inferior, blanco_superior)
+
             white_pixels = cv2.countNonZero(white_mask)
             total_white_pixels += white_pixels
             total_pixels += border.shape[0] * border.shape[1]
@@ -126,13 +133,13 @@ class Facial:
         v_fondo_blanco_similitud = int(parametros["fondo_blanco_similitud"])
 
         # Si el porcentaje de píxeles blancos es mayor que el umbral, consideramos que el fondo es blanco
-        if porcentaje_similitud >= v_fondo_blanco_similitud:
-            print(f"Fondo tiene el color blanco requerido ({porcentaje_similitud}%)")
+        if porcentaje_similitud > v_fondo_blanco_similitud:
+            print("Fondo tiene el color blanco requerido.")
             return True  
         else:
             print(f"Fondo NO tiene el color blanco requerido ({porcentaje_similitud}%)")
             return False
-
+        
     def validar_cabeza_recta(self, image):
         """
         Verifica si la cabeza está inclinada hacia un lado o está recta.
@@ -203,61 +210,60 @@ class Facial:
         Solo considera válido un traje si también se detecta una corbata.
         Además, limita la detección a un solo traje por imagen.
         """
-        if 'traje' in parametros and parametros['traje'] == "SI":
-            # Cargar los modelos entrenados si aún no se han cargado
-            if not self.model_corbatta or not self.model_traje:
-                self.cargar_modelo_traje_corbatta()
+        # Cargar los modelos entrenados si aún no se han cargado
+        if not self.model_corbatta or not self.model_traje:
+            self.cargar_modelo_traje_corbatta()
 
-            # Detectar corbatas en toda la imagen
-            resultados_corbatta = self.model_corbatta.predict(image)
-            corbata_detectada = False
+        # Detectar corbatas en toda la imagen
+        resultados_corbatta = self.model_corbatta.predict(image)
+        corbata_detectada = False
 
-            for deteccion in resultados_corbatta[0].boxes:
-                x1, y1, x2, y2 = map(int, deteccion.xyxy[0].cpu().numpy())
-                clase = int(deteccion.cls[0].item())
-                confianza = deteccion.conf[0].item()
+        for deteccion in resultados_corbatta[0].boxes:
+            x1, y1, x2, y2 = map(int, deteccion.xyxy[0].cpu().numpy())
+            clase = int(deteccion.cls[0].item())
+            confianza = deteccion.conf[0].item()
 
-                if clase == 0 and confianza >= 0.5:  # Asumiendo clase 0 para corbatas
-                    cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Corbata detectada</td></tr>"
-                    corbata_detectada = True
+            if clase == 0 and confianza >= 0.5:  # Asumiendo clase 0 para corbatas
+                cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Corbata detectada</td></tr>"
+                corbata_detectada = True
 
-            # Detectar trajes solo en la mitad inferior de la imagen
-            height, width, _ = image.shape
-            mitad_inferior = image[int(height / 2):, :]  # Cortar la imagen en la mitad inferior
+        # Detectar trajes solo en la mitad inferior de la imagen
+        height, width, _ = image.shape
+        mitad_inferior = image[int(height / 2):, :]  # Cortar la imagen en la mitad inferior
 
-            resultados_traje = self.model_traje.predict(mitad_inferior)
+        resultados_traje = self.model_traje.predict(mitad_inferior)
 
-            # Solo considerar la detección de un solo traje (el de mayor área o confianza)
-            mejor_deteccion = None
-            mayor_confianza = 0
-            traje_detectado = False
+        # Solo considerar la detección de un solo traje (el de mayor área o confianza)
+        mejor_deteccion = None
+        mayor_confianza = 0
+        traje_detectado = False
 
-            for deteccion in resultados_traje[0].boxes:
-                x1, y1, x2, y2 = map(int, deteccion.xyxy[0].cpu().numpy())
-                clase = int(deteccion.cls[0].item())
-                confianza = deteccion.conf[0].item()
+        for deteccion in resultados_traje[0].boxes:
+            x1, y1, x2, y2 = map(int, deteccion.xyxy[0].cpu().numpy())
+            clase = int(deteccion.cls[0].item())
+            confianza = deteccion.conf[0].item()
 
-                if clase == 0 and confianza >= 0.5:  # Asumiendo clase 0 para trajes
-                    if confianza > mayor_confianza:
-                        mejor_deteccion = (x1, y1, x2, y2)
-                        mayor_confianza = confianza
-                        traje_detectado = True
+            if clase == 0 and confianza >= 0.5:  # Asumiendo clase 0 para trajes
+                if confianza > mayor_confianza:
+                    mejor_deteccion = (x1, y1, x2, y2)
+                    mayor_confianza = confianza
+                    traje_detectado = True
 
-            # Si se detectó un traje y una corbata, marcar el traje como válido
-            if traje_detectado and corbata_detectada:
-                x1, y1, x2, y2 = mejor_deteccion
-                # Ajustar las coordenadas y1 e y2 para considerar que cortamos la mitad inferior de la imagen
-                y1 += int(height / 2)
-                y2 += int(height / 2)
-                cv2.rectangle(image, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Traje detectado (con corbata)</td></tr>"
-                return True
-            else:
-                print("No se detectó un traje válido con corbata.")
-                if traje_detectado and not corbata_detectada:
-                    self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Traje detectado pero sin corbata</td></tr>"
-                return False
+        # Si se detectó un traje y una corbata, marcar el traje como válido
+        if traje_detectado and corbata_detectada:
+            x1, y1, x2, y2 = mejor_deteccion
+            # Ajustar las coordenadas y1 e y2 para considerar que cortamos la mitad inferior de la imagen
+            y1 += int(height / 2)
+            y2 += int(height / 2)
+            cv2.rectangle(image, (x1, y1), (x2, y2), (255, 0, 0), 2)
+            self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Traje detectado (con corbata)</td></tr>"
+            return True
+        else:
+            print("No se detectó un traje válido con corbata.")
+            if traje_detectado and not corbata_detectada:
+                self.message += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Traje detectado pero sin corbata</td></tr>"
+            return False
             
     def detectar_accesorios(self, image, msg):
         """
@@ -494,14 +500,24 @@ class Facial:
                 #respuesta = True
                 self.message += "COLLAR DETECTADO"
             
-            if 'traje' in parametros and parametros['traje'] == "SI":
+            if 'formal' in parametros and parametros['formal'] == "SI":
+                # Detectar el género antes de proceder
+                genero = self.predecir_genero(image)
+                print(f"Detectado: {genero}")
+
+                # Si es mujer, no detectar traje
+                if genero == "Mujer":
+                    print("No se detectará traje porque es mujer.")
+                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se detecta traje porque es mujer.</td></tr>"
+
+                # Si es hombre, proceder con la detección de traje
                 if self.detectar_traje_corbatta(image, parametros):
                     msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se ha detectado un traje.</td></tr>"
                 else:
                     msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'><b style='color:red;'>NO</b> se detecta traje.</td></tr>"
                     respuesta = False
             else:
-                print('TRAJE == NO')
+                print('FORMAL == NO')
 
             if ojos_bordeados or rostro_bordeado:
                 nombre_archivo = self.generar_nombre_archivo(usuario_id)
@@ -523,10 +539,17 @@ class Facial:
             if not respuesta_espacio:
                 respuesta = False
                 
+            respuesta_espacio, msg = self.detectar_espacio_lateral_inferior_con_color(image, msg)
+            if not respuesta_espacio:
+                respuesta = False
+                
             res_proporcion, msg = self.detectar_proporcion_cabeza_cuerpo(image, msg)
             if not res_proporcion:
                 respuesta = False
                 
+            ropa_blanca_detectada, msg = self.detectar_ropa_blanca(image, msg)
+            if not ropa_blanca_detectada:
+                print('ROPABLANCA == NO')
             # respuesta_nitidez, msg = self.validar_nitidez(image, msg)
             # if not respuesta_nitidez:
             #     respuesta = False
@@ -680,6 +703,90 @@ class Facial:
             msg += f"<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td>"
             msg += f"<td class='ytradre_tbl_td'> Imagen con buena calidad&nbsp;<b style='color:green'>({var_laplacian:.2f})</b></td></tr>"
             return True, msg
+    
+    def predecir_genero(self, image):
+        """Detecta el género en la imagen usando el modelo cargado."""
+        image_resized = cv2.resize(image, (227, 227))
+
+        blob = cv2.dnn.blobFromImage(image_resized, 1.0, (227, 227), (104, 117, 123), swapRB=False, crop=False)
+
+        self.net.setInput(blob)
+
+        output = self.net.forward()
+
+        gender = np.argmax(output)
+        gender = "Hombre" if gender == 0 else "Mujer"
+        print(f"Predicción de género: {gender}")
+        return gender
+    
+    def detectar_ropa_blanca(self, image, msg):
+        alto, ancho, _ = image.shape
+        y_inicio = int(alto * 0.45)
+        y_fin = int(alto * 0.85)
+        x_inicio = int(ancho * 0.25)
+        x_fin = int(ancho * 0.75)
+
+        region_torso = image[y_inicio:y_fin, x_inicio:x_fin]
+
+        blanco_bajo = np.array([200, 200, 200], dtype=np.uint8)
+        blanco_alto = np.array([255, 255, 255], dtype=np.uint8)
+
+        mascara_blanca = cv2.inRange(region_torso, blanco_bajo, blanco_alto)
+        pixeles_blancos = cv2.countNonZero(mascara_blanca)
+        total_pixeles = region_torso.shape[0] * region_torso.shape[1]
+        porcentaje_blanco = (pixeles_blancos / total_pixeles) * 100
+
+        umbral_blanco = 35  # Ajustable
+
+        cv2.rectangle(image, (x_inicio, y_inicio), (x_fin, y_fin), (0, 255, 0), 2)
+
+        if porcentaje_blanco >= umbral_blanco:
+            msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se ha detectado ropa blanca.</td></tr>"
+            print(f"✅ Ropa blanca detectada ({porcentaje_blanco:.2f}%)")
+            return True, msg
+        else:
+            msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se ha detectado ropa blanca.</td></tr>"
+            print(f"❌ No se detectó ropa blanca ({porcentaje_blanco:.2f}%)")
+            return False, msg
+    
+    def detectar_espacio_lateral_inferior_con_color(self, image, msg):
+        alto, ancho, _ = image.shape
+        centro_x = ancho // 2
+        centro_y = alto // 2
+
+        data = json.loads(self.json_local)
+        parametros = json.loads(data["v_parametro_json"].replace("'", '"'))
+
+        def validar_espacio_linea(eje, rango, sentido):
+            for valor in rango:
+                pixel = image[valor, eje] if sentido == "vertical" else image[eje, valor]
+                if not all(245 <= c <= 255 for c in pixel):  # Detecta NO blanco
+                    return valor
+            return rango[-1]
+
+        #distancia_sup = validar_espacio_linea(centro_x, range(alto), "vertical")
+        distancia_inf = alto - validar_espacio_linea(centro_x, reversed(range(alto)), "vertical")
+        distancia_izq = validar_espacio_linea(centro_y, range(ancho), "horizontal")
+        distancia_der = ancho - validar_espacio_linea(centro_y, reversed(range(ancho)), "horizontal")
+
+        errores = False  # Para controlar si hubo error en alguna parte
+
+        # if distancia_sup > 0:
+        #     msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en la parte superior </td></tr>"
+        #     errores = True
+        if distancia_inf > 0:
+            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en la parte inferior </td></tr>"
+            errores = True
+        if distancia_izq > 0 or distancia_der > 0:
+            msg += f"<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco a los lados (Izq: {distancia_izq}px, Der: {distancia_der}px) </td></tr>"
+            errores = True
+
+        if not errores:
+            msg += "<tr><td><i class='fa fa-circle' style='color:green;'></i></td><td class='ytradre_tbl_td'> No se detectaron espacios blancos en los bordes </td></tr>"
+
+        return not errores, msg
+
+
 
 
 

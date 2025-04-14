@@ -485,12 +485,12 @@ class Facial:
                     msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: red;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Ojo derecho no detectado</td></tr>"
                     respuesta = False
                     
-            if self.validar_fondo_blanco(image):
-                msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Fondo tiene el color blanco requerido </td></tr>"
-                respuesta_fondo_blanco = True
-            else:
-                msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Fondo <b style='color:red;'>NO</b> tiene el color blanco requerido </td></tr>"
-                respuesta = False
+            # if self.validar_fondo_blanco(image):
+            #     msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Fondo tiene el color blanco requerido </td></tr>"
+            #     respuesta_fondo_blanco = True
+            # else:
+            #     msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Fondo <b style='color:red;'>NO</b> tiene el color blanco requerido </td></tr>"
+            #     respuesta = False
 
             # Detección de collares
             collares_detectados, msg = self.detectar_collares(image, msg)
@@ -509,13 +509,14 @@ class Facial:
                 if genero == "Mujer":
                     print("No se detectará traje porque es mujer.")
                     msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se detecta traje porque es mujer.</td></tr>"
-
-                # Si es hombre, proceder con la detección de traje
-                if self.detectar_traje_corbatta(image, parametros):
-                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se ha detectado un traje.</td></tr>"
+                    respuesta = True
                 else:
-                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'><b style='color:red;'>NO</b> se detecta traje.</td></tr>"
-                    respuesta = False
+                    # Si es hombre, proceder con la detección de traje
+                    if self.detectar_traje_corbatta(image, parametros):
+                        msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se ha detectado un traje.</td></tr>"
+                    else:
+                        msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'><b style='color:red;'>NO</b> se detecta traje.</td></tr>"
+                        respuesta = False
             else:
                 print('FORMAL == NO')
 
@@ -537,6 +538,20 @@ class Facial:
             
             respuesta_espacio, msg = self.detectar_espacio_arriba_con_color(image, msg)
             if not respuesta_espacio:
+                respuesta = False
+            
+            respuesta_espacio, msg = self.detectar_espacio_lateral_inferior_con_color(image, msg)
+
+            if respuesta_espacio:
+                if self.validar_fondo_blanco(image):
+                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Fondo tiene el color blanco requerido </td></tr>"
+                    respuesta_fondo_blanco = True
+                else:
+                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> Fondo <b style='color:red;'>NO</b> tiene el color blanco requerido </td></tr>"
+                    respuesta = False
+            else:
+                # Si hay error en espacio, NO validar fondo blanco
+                msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: orange;font-size: 20px;'></i></td><td class='ytradre_tbl_td'> No se validó el fondo blanco por error en espacios laterales o inferior </td></tr>"
                 respuesta = False
                 
             res_proporcion, msg = self.detectar_proporcion_cabeza_cuerpo(image, msg)
@@ -744,6 +759,42 @@ class Facial:
             msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se ha detectado ropa blanca.</td></tr>"
             print(f"❌ No se detectó ropa blanca ({porcentaje_blanco:.2f}%)")
             return False, msg
+    
+    def detectar_espacio_lateral_inferior_con_color(self, image, msg):
+        alto, ancho, _ = image.shape
+
+        data = json.loads(self.json_local)
+        parametros = json.loads(data["v_parametro_json"].replace("'", '"'))
+
+        errores = False
+
+        blanco_min = 245
+        blanco_max = 255
+
+        # Punto inferior izquierdo (ver hacia la izquierda)
+        esquina_izq = image[alto - 1, 0:int(ancho * 0.1)]
+        if np.all((esquina_izq >= blanco_min) & (esquina_izq <= blanco_max), axis=1).any():
+            errores = True
+            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en el borde izquierdo (desde la esquina inferior)</td></tr>"
+
+        # Punto inferior derecho (ver hacia la derecha)
+        esquina_der = image[alto - 1, int(ancho * 0.9):]
+        if np.all((esquina_der >= blanco_min) & (esquina_der <= blanco_max), axis=1).any():
+            errores = True
+            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en el borde derecho (desde la esquina inferior)</td></tr>"
+
+        # Punto inferior centro (ver hacia abajo)
+        centro_x = ancho // 2
+        fila_inferior = image[alto - 1, centro_x - 2:centro_x + 2]
+        if np.all((fila_inferior >= blanco_min) & (fila_inferior <= blanco_max), axis=1).any():
+            errores = True
+            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en la parte inferior central</td></tr>"
+
+        if not errores:
+            msg += "<tr><td><i class='fa fa-circle' style='color:green;'></i></td><td class='ytradre_tbl_td'> No se detectaron espacios blancos en los bordes inferiores ni laterales.</td></tr>"
+
+        return not errores, msg
+
 
 
 
