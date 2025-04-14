@@ -321,7 +321,7 @@ class Facial:
         for deteccion in resultados_collar[0].boxes:
             x1, y1, x2, y2 = map(int, deteccion.xyxy[0].cpu().numpy())
             confianza = deteccion.conf[0].item()
-            umbral_confianza = 0.5
+            umbral_confianza = 0.6
 
             if confianza >= umbral_confianza:
                 # Ajustamos las coordenadas Y porque estamos usando la mitad inferior de la imagen
@@ -508,7 +508,7 @@ class Facial:
                 # Si es mujer, no detectar traje
                 if genero == "Mujer":
                     print("No se detectará traje porque es mujer.")
-                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se detecta traje porque es mujer.</td></tr>"
+                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se detecta traje porque es mujer.</td></tr>"
                     respuesta = True
                 else:
                     # Si es hombre, proceder con la detección de traje
@@ -756,7 +756,7 @@ class Facial:
             print(f"✅ Ropa blanca detectada ({porcentaje_blanco:.2f}%)")
             return True, msg
         else:
-            msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se ha detectado ropa blanca.</td></tr>"
+            msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se ha detectado ropa blanca.</td></tr>"
             print(f"❌ No se detectó ropa blanca ({porcentaje_blanco:.2f}%)")
             return False, msg
     
@@ -784,14 +784,13 @@ class Facial:
             msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en el borde derecho (desde la esquina inferior)</td></tr>"
 
         # Punto inferior centro (ver hacia abajo)
-        centro_x = ancho // 2
-        fila_inferior = image[alto - 1, centro_x - 2:centro_x + 2]
-        if np.all((fila_inferior >= blanco_min) & (fila_inferior <= blanco_max), axis=1).any():
+        esquina_inf_der = image[alto - 1, int(ancho * 0.9):]
+        if np.all((esquina_inf_der >= blanco_min) & (esquina_inf_der <= blanco_max), axis=1).any():
             errores = True
-            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en la parte inferior central</td></tr>"
+            msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en la parte inferior.</td></tr>"
 
         if not errores:
-            msg += "<tr><td><i class='fa fa-circle' style='color:green;'></i></td><td class='ytradre_tbl_td'> No se detectaron espacios blancos en los bordes inferiores ni laterales.</td></tr>"
+            msg += "<tr><td><i class='fa fa-circle' style='color:#28a745;'></i></td><td class='ytradre_tbl_td'> No se detectaron espacios blancos en los bordes inferiores ni laterales.</td></tr>"
 
         return not errores, msg
 
