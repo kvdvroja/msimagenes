@@ -140,7 +140,7 @@ class Facial:
             print(f"Fondo NO tiene el color blanco requerido ({porcentaje_similitud}%)")
             return False
         
-    def validar_cabeza_recta(self, image):
+    def validar_cabeza_recta(self, image,parametros):
         """
         Verifica si la cabeza está inclinada hacia un lado o está recta.
         """
@@ -163,7 +163,10 @@ class Facial:
                     diferencia_altura = abs(y_ojo_izq - y_ojo_der)
 
                     # Si la diferencia de altura entre los ojos es mayor que un umbral, la cabeza está inclinada
-                    umbral_inclinacion = 8  # Puedes ajustar este valor según sea necesario
+                    if 'formal' in parametros and parametros['formal'] == "SI":
+                        umbral_inclinacion = 70  # Puedes ajustar este valor según sea necesario
+                    else:
+                        umbral_inclinacion = 8  # Puedes ajustar este valor según sea necesario
 
                     if diferencia_altura > umbral_inclinacion:
                         print(f"La cabeza está inclinada (diferencia entre ojos: {diferencia_altura}px)")
@@ -508,7 +511,7 @@ class Facial:
                 # Si es mujer, no detectar traje
                 if genero == "Mujer":
                     print("No se detectará traje porque es mujer.")
-                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se detectó traje al identificarse género femenino.</td></tr>"
+                    #msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se detectó traje al identificarse género femenino.</td></tr>"
                     respuesta = True
                 else:
                     # Si es hombre, proceder con la detección de traje
@@ -527,7 +530,7 @@ class Facial:
                 ruta_imagen = os.path.join(self.config['GENERAL']['upload_static'], self.config['GENERAL']['upload_static_dir'], nombre_archivo)
                 self.eliminar_imagen(ruta_imagen, 1200)
                 
-            respuesta_cabeza_recta, diferencia_hombros = self.validar_cabeza_y_hombros_rectos(image)
+            respuesta_cabeza_recta, diferencia_hombros = self.validar_cabeza_y_hombros_rectos(image,parametros)
             if respuesta_cabeza_recta:
                 respuesta_cabeza_recta = True
             else:
@@ -637,8 +640,8 @@ class Facial:
         else:
             return True, msg
         
-    def validar_cabeza_y_hombros_rectos(self, image):
-        cabeza_recta = self.validar_cabeza_recta(image)
+    def validar_cabeza_y_hombros_rectos(self, image,parametros):
+        cabeza_recta = self.validar_cabeza_recta(image,parametros)
         hombros_rectos, diferencia_y = self.validar_inclinacion_hombros(image)
 
         if not cabeza_recta and not hombros_rectos:
