@@ -508,12 +508,12 @@ class Facial:
                 # Si es mujer, no detectar traje
                 if genero == "Mujer":
                     print("No se detectará traje porque es mujer.")
-                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>No se detecta traje porque es mujer.</td></tr>"
+                    msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se detectó traje al identificarse género femenino.</td></tr>"
                     respuesta = True
                 else:
                     # Si es hombre, proceder con la detección de traje
                     if self.detectar_traje_corbatta(image, parametros):
-                        msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se ha detectado un traje.</td></tr>"
+                        msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #28a745;font-size: 20px;'></i></td><td class='ytradre_tbl_td'>Se detectó corbata al identificarse género masculino.</td></tr>"
                     else:
                         msg += "<tr><td><i class='fa fa-circle' aria-hidden='true' style='color: #ff2d41;font-size: 20px;'></i></td><td class='ytradre_tbl_td'><b style='color:red;'>NO</b> se detecta traje.</td></tr>"
                         respuesta = False
@@ -790,7 +790,7 @@ class Facial:
             msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en la parte inferior.</td></tr>"
 
         if not errores:
-            msg += "<tr><td><i class='fa fa-circle' style='color:#28a745;'></i></td><td class='ytradre_tbl_td'> No se detectaron espacios blancos en los bordes inferiores ni laterales.</td></tr>"
+            msg += "<tr><td><i class='fa fa-circle' style='color:#28a745;'></i></td><td class='ytradre_tbl_td'>No se detecta espacios blancos en bordes inferiores ni laterales.</td></tr>"
 
         return not errores, msg
 
