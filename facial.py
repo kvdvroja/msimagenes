@@ -793,7 +793,7 @@ class Facial:
             msg += "<tr><td><i class='fa fa-circle' style='color:red;'></i></td><td class='ytradre_tbl_td'> Existe espacio blanco en la parte inferior.</td></tr>"
 
         if not errores:
-            msg += "<tr><td><i class='fa fa-circle' style='color:#28a745;'></i></td><td class='ytradre_tbl_td'>No se detecta espacios blancos en bordes inferiores ni laterales.</td></tr>"
+            msg += "<tr><td><i class='fa fa-circle' style='color:#28a745;'></i></td><td class='ytradre_tbl_td'>No se detecta espacios blancos en bordes.</td></tr>"
 
         return not errores, msg
 
