@@ -32,19 +32,19 @@ class Facial:
     
     def cargar_modelo_yolo(self):
         """Carga el modelo YOLOv8 entrenado desde un archivo local."""
-        model_path = './best.pt'  # Cambia esto a la ruta donde está guardado tu archivo best.pt
-        model = YOLO(model_path)  # Cargar el modelo localmente
+        model_path = './best.pt'  
+        model = YOLO(model_path)  
         return model
     
     def cargar_modelo_accesorios(self):
         """Carga el modelo YOLOv8 entrenado para detectar accesorios."""
-        model_path_accessories = './accesories.pt'  # Ruta del archivo entrenado para accesorios
+        model_path_accessories = './accesories.pt'  
         model = YOLO(model_path_accessories)
         return model
     
     def cargar_modelo_anteojos(self):
         """Carga el modelo YOLOv8 entrenado para detectar anteojos."""
-        model_path_glasses = './glasses.pt'  # Ruta del archivo entrenado para anteojos
+        model_path_glasses = './glasses.pt'  
         self.model_glasses = YOLO(model_path_glasses)
     
     def cargar_modelo_traje_corbatta(self):
