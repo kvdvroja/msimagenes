@@ -3,3 +3,4 @@ venv/
 datasets/
 runs/
 uploads/
+.venv/

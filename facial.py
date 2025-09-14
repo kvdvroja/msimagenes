@@ -35,32 +35,32 @@ class Facial:
     
     def cargar_modelo_yolo(self):
         """Carga el modelo YOLOv8 entrenado desde un archivo local."""
-        model_path = './necklaces.pt'  # Cambia esto a la ruta donde está guardado tu archivo best.pt
+        model_path = './models/necklaces.pt'  # Cambia esto a la ruta donde está guardado tu archivo best.pt
         model = YOLO(model_path)
         return model
     
     def cargar_modelo_accesorios(self):
         """Carga el modelo YOLOv8 entrenado para detectar accesorios."""
-        model_path_accessories = './accesories.pt'  # Ruta del archivo entrenado para accesorios
+        model_path_accessories = './models/accesories.pt'  # Ruta del archivo entrenado para accesorios
         model = YOLO(model_path_accessories)
         return model
     
     def cargar_modelo_genero(self):
         """Carga el modelo de género preentrenado en OpenCV (caffe)."""
-        modelFile = "./gender_net.caffemodel"  # Ruta de tu archivo caffemodel
-        configFile = "./gender_deploy.prototxt"  # Ruta de tu archivo prototxt
+        modelFile = "./models/gender_net.caffemodel"  # Ruta de tu archivo caffemodel
+        configFile = "./models/gender_deploy.prototxt"  # Ruta de tu archivo prototxt
         self.net = cv2.dnn.readNetFromCaffe(configFile, modelFile)  # Asignar el modelo a self.net
 
     
     def cargar_modelo_anteojos(self):
         """Carga el modelo YOLOv8 entrenado para detectar anteojos."""
-        model_path_glasses = './glasses.pt'  # Ruta del archivo entrenado para anteojos
+        model_path_glasses = './models/glasses.pt'  # Ruta del archivo entrenado para anteojos
         self.model_glasses = YOLO(model_path_glasses)
     
     def cargar_modelo_traje_corbatta(self):
         """Carga el modelo YOLOv8 entrenado para trajes y corbatas."""
-        model_path_ties = './ties.pt'
-        model_path_suits = './suits.pt'
+        model_path_ties = './models/ties.pt'
+        model_path_suits = './models/suits.pt'
         self.model_corbatta = YOLO(model_path_ties)
         self.model_traje = YOLO(model_path_suits)
 
